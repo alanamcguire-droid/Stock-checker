@@ -11,7 +11,6 @@ set -uo pipefail
 
 # key|base_url|collection_handle
 SITES=(
-  "thekidcollective|https://thekidcollective.co.uk|needoh"
   "jukupop|https://jukupop.com|needoh-squishy-fidget-toys-shop-stress-balls-fidget-fun"
 )
 
