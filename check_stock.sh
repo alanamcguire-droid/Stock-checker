@@ -11,7 +11,6 @@ set -uo pipefail
 
 # key|base_url|collection_handle
 SITES=(
-  "plushparadise|https://plushparadise.co.uk|needoh"
   "thekidcollective|https://thekidcollective.co.uk|needoh"
 )
 
