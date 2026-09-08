@@ -12,6 +12,7 @@ set -uo pipefail
 # key|base_url|collection_handle
 SITES=(
   "thekidcollective|https://thekidcollective.co.uk|needoh"
+  "jukupop|https://jukupop.com|needoh-squishy-fidget-toys-shop-stress-balls-fidget-fun"
 )
 
 STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/state"
@@ -36,7 +37,18 @@ for site in "${SITES[@]}"; do
     continue
   fi
 
+  # Confirm the response is a well-formed products.json payload before trusting
+  # an empty product list (some collections hide out-of-stock items entirely,
+  # so 0 products is a legitimate "nothing in stock right now" state).
+  if ! jq -e '.products | type == "array"' "$tmp_response" >/dev/null 2>&1; then
+    echo "ERROR [$key]: malformed response (no .products array)" >&2
+    rm -f "$tmp_response"
+    overall_status=1
+    continue
+  fi
+
   # Build a flat "title|handle|variant|available" list per product/variant.
+  # May be empty if the collection currently has no (visible) products.
   current="$(jq -r '
     .products[]
     | .title as $title
@@ -46,11 +58,8 @@ for site in "${SITES[@]}"; do
   ' "$tmp_response")"
   rm -f "$tmp_response"
 
-  if [[ -z "$current" ]]; then
-    echo "ERROR [$key]: no products parsed from response" >&2
-    overall_status=1
-    continue
-  fi
+  variant_count=0
+  [[ -n "$current" ]] && variant_count=$(echo "$current" | wc -l)
 
   if [[ ! -f "$state_file" ]]; then
     # First run for this site: just record state, nothing to compare against yet.
@@ -58,19 +67,21 @@ for site in "${SITES[@]}"; do
       split("\n") | map(select(length > 0) | split("\t")) |
       map({title: .[0], handle: .[1], variant: .[2], available: (.[3] == "true")})
     ' > "$state_file"
-    echo "Initialized stock state for $key ($(echo "$current" | wc -l) variants tracked). No comparison on first run."
+    echo "Initialized stock state for $key ($variant_count variants tracked). No comparison on first run."
     continue
   fi
 
-  while IFS=$'\t' read -r title handle variant available; do
-    was_available=$(jq -r --arg h "$handle" --arg v "$variant" '
-      map(select(.handle == $h and .variant == $v)) | .[0].available // false
-    ' "$state_file")
-    if [[ "$was_available" == "false" && "$available" == "true" ]]; then
-      url="${base_url}/products/${handle}"
-      all_newly_in_stock+="[$key] ${title} (${variant}) - ${url}"$'\n'
-    fi
-  done <<< "$current"
+  if [[ -n "$current" ]]; then
+    while IFS=$'\t' read -r title handle variant available; do
+      was_available=$(jq -r --arg h "$handle" --arg v "$variant" '
+        map(select(.handle == $h and .variant == $v)) | .[0].available // false
+      ' "$state_file")
+      if [[ "$was_available" == "false" && "$available" == "true" ]]; then
+        url="${base_url}/products/${handle}"
+        all_newly_in_stock+="[$key] ${title} (${variant}) - ${url}"$'\n'
+      fi
+    done <<< "$current"
+  fi
 
   # Save new state for this site
   echo "$current" | jq -R -s '
