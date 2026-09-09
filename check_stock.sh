@@ -12,6 +12,7 @@ set -uo pipefail
 # key|base_url|collection_handle
 SITES=(
   "jukupop|https://jukupop.com|needoh-squishy-fidget-toys-shop-stress-balls-fidget-fun"
+  "thekidcollective|https://thekidcollective.co.uk|needoh"
 )
 
 STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/state"
